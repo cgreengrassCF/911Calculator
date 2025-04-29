@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EMS Response Time Calculator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f0f8ff;
+      color: #333;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    h1 {
+      color: #005a9c;
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    label, select, input, button {
+      display: block;
+      margin: 10px 0;
+      width: 100%;
+      max-width: 400px;
+    }
+    input, select {
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 1rem;
+    }
+    button {
+      padding: 10px;
+      background-color: #ffa500;
+      border: none;
+      color: white;
+      font-weight: bold;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    button:hover {
+      background-color: #ff8c00;
+    }
+    .result {
+      margin-top: 20px;
+      font-weight: bold;
+      padding: 10px;
+      border-radius: 5px;
+      max-width: 400px;
+      word-wrap: break-word;
+    }
+    .ontime {
+      color: #ffffff;
+      background-color: #28a745;
+    }
+    .late {
+      color: #ffffff;
+      background-color: #dc3545;
+    }
+    @media (min-width: 600px) {
+      label, select, input, button {
+        margin: 10px auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>EMS Response Time Calculator</h1>
+  </header>
+
+  <label for="incidentId">Incident ID:</label>
+  <input type="text" id="incidentId" placeholder="Enter Incident ID" />
+
+  <label for="date">Date:</label>
+  <input type="date" id="date" />
+
+  <label for="startTime">Start Time (HH:MM:SS):</label>
+  <input type="time" id="startTime" step="1">
+
+  <label for="endTime">End Time (HH:MM:SS):</label>
+  <input type="time" id="endTime" step="1">
+
+  <label for="location">Location:</label>
+  <select id="location">
+    <option value="hill">Hill County</option>
+    <option value="white_bluff">White Bluff</option>
+    <option value="johnson">Johnson County</option>
+    <option value="kaufman_12less">Kaufman < 12mi</option>
+    <option value="kaufman_12more">Kaufman > 12mi</option>
+    <option value="terrell">City of Terrell</option>
+    <option value="city_kaufman">City of Kaufman</option>
+    <option value="forney">City of Forney</option>
+    <option value="combine">City of Combine</option>
+    <option value="seagoville">City of Seagoville</option>
+  </select>
+
+  <label for="priority">Priority:</label>
+  <select id="priority">
+    <option value="p1">P1</option>
+    <option value="p2">P2</option>
+    <option value="p3">P3</option>
+  </select>
+
+  <label for="tag">Tag:</label>
+  <select id="tag">
+    <option value="GPS">GPS</option>
+    <option value="Staged">Staged</option>
+    <option value="Mutual Aid - Given">Mutual Aid - Given</option>
+  </select>
+
+  <label for="tagNotes">Tag Notes:</label>
+  <select id="tagNotes">
+    <option value="Rounding Error">Rounding Error</option>
+    <option value="Times Made - No Button Push">Times Made - No Button Push</option>
+    <option value="Command Vehicle">Command Vehicle</option>
+    <option value="Additional Responding Unit">Additional Responding Unit</option>
+    <option value="Crew Staged">Crew Staged</option>
+  </select>
+
+  <button onclick="calculateResponseTime()">Check Response Time</button>
+  <button onclick="exportToCSV()">Export to CSV</button>
+
+  <div class="result" id="result" aria-live="polite"></div>
+
+  <script>
+    const exportData = [];
+
+    // Contract thresholds
+    const contracts = {
+      hill: { all: "14:59" },
+      white_bluff: { all: "17:59" },
+      johnson: { p1: "14:59", p2: "19:59", p3: "24:59" },
+      kaufman_12less: { p1: "09:59", p2: "11:59", p3: "14:59" },
+      kaufman_12more: { p1: "11:59", p2: "12:59", p3: "19:59" },
+      terrell: { p1: "08:59", p2: "11:59", p3: "14:59" },
+      city_kaufman: { p1: "10:59", p2: "12:59", p3: "15:59" },
+      forney: { p1: "09:59", p2: "11:59", p3: "14:59" },
+      combine: { p1: "09:59", p2: "11:59", p3: "14:59" },
+      seagoville: { p1: "08:59", p2: "10:59", p3: "14:59" }
+    };
+
+    function calculateResponseTime() {
+      const incidentId = document.getElementById("incidentId").value.trim();
+      const dateVal = document.getElementById("date").value;
+      const start = document.getElementById("startTime").value;
+      const end = document.getElementById("endTime").value;
+      const location = document.getElementById("location").value;
+      const priority = document.getElementById("priority").value;
+      const tag = document.getElementById("tag").value;
+      const tagNotes = document.getElementById("tagNotes").value;
+
+      const resultDiv = document.getElementById("result");
+      resultDiv.className = "result";
+
+      if (!incidentId || !dateVal || !start || !end) {
+        resultDiv.textContent = "Please fill out Incident ID, Date, Start and End times.";
+        return;
+      }
+
+      // Parse date
+      const [year, month, day] = dateVal.split("-");
+      const formattedDate = `${month}/${day}/${year}`;
+
+      // Parse times as local
+      const startTime = new Date(`1970-01-01T${start}`);
+      const endTime = new Date(`1970-01-01T${end}`);
+      let diffMs = endTime - startTime;
+      if (diffMs < 0) diffMs += 86400000;
+
+      const diffMin = Math.floor(diffMs / 60000);
+      const diffSec = Math.floor((diffMs % 60000) / 1000);
+      const responseTime = `${String(diffMin).padStart(2,'0')}:${String(diffSec).padStart(2,'0')}`;
+
+      // Determine contract target
+      const targetRaw = (contracts[location].all) ? contracts[location].all : contracts[location][priority];
+      const [targetMin, targetSec] = targetRaw.split(":").map(Number);
+      const targetTotalSec = targetMin * 60 + targetSec;
+      const responseTotalSec = diffMin * 60 + diffSec;
+
+      const onTime = responseTotalSec <= targetTotalSec;
+      const status = onTime ? "✅ On Time" : "❌ Late";
+
+      // Display result
+      resultDiv.textContent = `Incident ${incidentId} | ${formattedDate} | Response Time: ${responseTime} — ${status}`;
+      resultDiv.classList.add(onTime ? "ontime" : "late");
+
+      // Add entry to export data
+      exportData.push({
+        IncidentID: incidentId,
+        Date: formattedDate,
+        StartTime: start,
+        EndTime: end,
+        Location: document.getElementById("location").selectedOptions[0].textContent,
+        Priority: priority.toUpperCase(),
+        Tag: tag,
+        TagNotes: tagNotes,
+        ResponseTime: responseTime,
+        TargetTime: targetRaw,
+        Status: status
+      });
+    }
+
+    function exportToCSV() {
+      if (exportData.length === 0) return;
+      const headers = Object.keys(exportData[0]);
+      const csvRows = [headers.join(",")];
+
+      exportData.forEach(entry => {
+        const values = headers.map(h => entry[h]);
+        csvRows.push(values.join(","));
+      });
+
+      const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "response_times_log.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  </script>
+</body>
+</html>
